@@ -6,9 +6,9 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-// Note that this pool has no minter key of BATH (rewards).
+// Note that this pool has no minter key of TUB (rewards).
 // Instead, rewards will be sent to this pool at the beginning.
-contract tFarm1 is Ownable {
+contract SteamRoom is Ownable {
     using SafeERC20 for IERC20;
 
     /// User-specific information.
@@ -17,8 +17,8 @@ contract tFarm1 is Ownable {
         uint256 amount;
         /// How many unclaimed rewards does the user have pending.
         uint256 rewardDebt;
-        /// How many baths the user claimed.
-        uint256 claimedBath;
+        /// How many tubs the user claimed.
+        uint256 claimedTub;
     }
 
     /// Pool-specific information.
@@ -26,20 +26,20 @@ contract tFarm1 is Ownable {
         /// Address of the token staked in the pool.
         IERC20 token;
         /// Allocation points assigned to the pool.
-        /// @dev Rewards are distributed in the pool according to formula:
-        //      (allocPoint / totalAllocPoint) * bathPerSecond
+        /// @dev Rewards are distributed in the pool according to formula: 
+        //      (allocPoint / totalAllocPoint) * tubPerSecond
         uint256 allocPoint;
         /// Last time the rewards distribution was calculated.
         uint256 lastRewardTime;
-        /// Accumulated BATH per share.
-        uint256 accBathPerShare;
+        /// Accumulated TUB per share.
+        uint256 accTubPerShare;
         /// Deposit fee in %, where 100 == 1%.
         uint16 depositFee;
         uint16 withdrawFee;
         /// Is the pool rewards emission started.
         bool isStarted;
         /// Pool claimed Amount
-        uint256 poolClaimedBath;
+        uint256 poolClaimedTub;
     }
 
     /// Reward token.
@@ -58,14 +58,14 @@ contract tFarm1 is Ownable {
     /// Total allocation points. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
 
-    /// The time when BATH emissions start.
+    /// The time when TUB emissions start.
     uint256 public poolStartTime;
 
-    /// The time when BATH emissions end.
+    /// The time when TUB emissions end.
     uint256 public poolEndTime;
 
-    /// Amount of BATH emitted each second.
-    uint256 public bathPerSecond;
+    /// Amount of TUB emitted each second.
+    uint256 public tubPerSecond;
     /// Running time of emissions (in seconds).
     uint256 public runningTime;
     /// Total amount of tokens to be emitted.
@@ -73,102 +73,54 @@ contract tFarm1 is Ownable {
 
     /* Events */
 
-    event AddPool(
-        address indexed user,
-        uint256 indexed pid,
-        uint256 allocPoint,
-        uint256 totalAllocPoint,
-        uint16 depositFee,
-        uint16 withdrawFee
-    );
-    event ModifyPool(
-        address indexed user,
-        uint256 indexed pid,
-        uint256 allocPoint,
-        uint256 totalAllocPoint,
-        uint16 depositFee,
-        uint16 withdrawFee
-    );
-    event Deposit(
-        address indexed user,
-        uint256 indexed pid,
-        uint256 amount,
-        uint256 depositFee
-    );
-    event Withdraw(
-        address indexed user,
-        uint256 indexed pid,
-        uint256 amount,
-        uint16 withdrawFee
-    );
-    event EmergencyWithdraw(
-        address indexed user,
-        uint256 indexed pid,
-        uint256 amount
-    );
+    event AddPool(address indexed user, uint256 indexed pid, uint256 allocPoint, uint256 totalAllocPoint, uint16 depositFee, uint16 withdrawFee);
+    event ModifyPool(address indexed user, uint256 indexed pid, uint256 allocPoint, uint256 totalAllocPoint, uint16 depositFee, uint16 withdrawFee);
+    event Deposit(address indexed user, uint256 indexed pid, uint256 amount, uint256 depositFee);
+    event Withdraw(address indexed user, uint256 indexed pid, uint256 amount, uint16 withdrawFee);
+    event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
     event RewardPaid(address indexed user, uint256 amount);
     event UpdateFeeCollector(address indexed user, address feeCollector);
-    event RecoverUnsupported(
-        address indexed user,
-        address token,
-        uint256 amount,
-        address targetAddress
-    );
-    event EmissionRateUpdated(
-        address indexed caller,
-        uint256 previousAmount,
-        uint256 newAmount
-    );
+    event RecoverUnsupported(address indexed user, address token, uint256 amount, address targetAddress);
+    event EmissionRateUpdated(address indexed caller, uint256 previousAmount, uint256 newAmount);
 
     /// Default constructor.
-    /// @param _bathAddress Address of BATH token.
+    /// @param _tubAddress Address of TUB token.
     /// @param _poolStartTime Emissions start time.
     /// @param _runningTime Running time of emissions (in seconds).
-    /// @param _bathPerSecond bath Per Second
+    /// @param _tubPerSecond tub Per Second
     /// @param _feeCollector Address where the deposit fees are transferred.
     constructor(
-        address _bathAddress,
+        address _tubAddress,
         uint256 _poolStartTime,
         uint256 _runningTime,
-        uint256 _bathPerSecond,
+        uint256 _tubPerSecond,
         address _feeCollector
     ) {
         require(block.timestamp < _poolStartTime, "late");
         require(_feeCollector != address(0), "Address cannot be 0");
-        require(
-            _runningTime >= 1 days,
-            "Running time has to be at least 1 day"
-        );
+        require(_runningTime >= 1 days, "Running time has to be at least 1 day");
 
-        if (_bathAddress != address(0)) bath = IERC20(_bathAddress);
+        if (_tubAddress != address(0)) tub = IERC20(_tubAddress);
 
         poolStartTime = _poolStartTime;
         runningTime = _runningTime;
         poolEndTime = poolStartTime + runningTime;
 
-        bathPerSecond = _bathPerSecond;
+        tubPerSecond = _tubPerSecond;
 
         feeCollector = _feeCollector;
         poolofficer = msg.sender;
     }
-
     modifier onlyOwnerOrOfficer() {
-        require(
-            owner() == msg.sender || poolofficer == msg.sender,
-            "Caller is not the owner or the officer"
-        );
+        require(owner() == msg.sender || poolofficer == msg.sender, "Caller is not the owner or the officer");
         _;
     }
-
     /// Check if a pool already exists for specified token.
     /// @param _token Address of token to check for existing pools
     function checkPoolDuplicate(IERC20 _token) internal view {
         uint256 length = poolInfo.length;
         for (uint256 pid = 0; pid < length; ++pid) {
-            require(
-                poolInfo[pid].token != _token,
-                "BathGenesisRewardPool: existing pool?"
-            );
+            require(poolInfo[pid].token != _token, "TubGenesisRewardPool: existing pool?");
         }
     }
 
@@ -189,7 +141,7 @@ contract tFarm1 is Ownable {
         bool _withUpdate,
         uint256 _lastRewardTime
     ) public onlyOwnerOrOfficer {
-        _token.balanceOf(address(this)); // guard to revert calls that try to add non-IERC20 addresses
+        _token.balanceOf(address(this));    // guard to revert calls that try to add non-IERC20 addresses
         require(_depositFee <= 1500, "Deposit fee cannot be higher than 15%");
         checkPoolDuplicate(_token);
         if (_withUpdate) {
@@ -210,32 +162,24 @@ contract tFarm1 is Ownable {
                 _lastRewardTime = block.timestamp;
             }
         }
-        bool _isStarted = (_lastRewardTime <= poolStartTime) ||
-            (_lastRewardTime <= block.timestamp);
-        poolInfo.push(
-            PoolInfo({
-                token: _token,
-                allocPoint: _allocPoint,
-                lastRewardTime: _lastRewardTime,
-                accBathPerShare: 0,
-                depositFee: _depositFee,
-                withdrawFee: _withdrawFee,
-                isStarted: _isStarted,
-                poolClaimedBath: 0
-            })
-        );
+        bool _isStarted =
+        (_lastRewardTime <= poolStartTime) ||
+        (_lastRewardTime <= block.timestamp);
+        poolInfo.push(PoolInfo({
+            token : _token,
+            allocPoint : _allocPoint,
+            lastRewardTime : _lastRewardTime,
+            accTubPerShare : 0,
+            depositFee : _depositFee,
+            withdrawFee : _withdrawFee,
+            isStarted : _isStarted,
+            poolClaimedTub : 0
+            }));
         if (_isStarted) {
             totalAllocPoint = totalAllocPoint + _allocPoint;
         }
 
-        emit AddPool(
-            msg.sender,
-            poolInfo.length - 1,
-            _allocPoint,
-            totalAllocPoint,
-            _depositFee,
-            _withdrawFee
-        );
+        emit AddPool(msg.sender, poolInfo.length - 1, _allocPoint, totalAllocPoint, _depositFee, _withdrawFee);
     }
 
     /// Update the given pool's parameters.
@@ -244,12 +188,7 @@ contract tFarm1 is Ownable {
     /// @param _depositFee New deposit fee assigned to the pool
     /// @param _withdrawFee New deposit fee assigned to the pool
     /// @dev Can only be called by the Operator.
-    function set(
-        uint256 _pid,
-        uint256 _allocPoint,
-        uint16 _depositFee,
-        uint16 _withdrawFee
-    ) public onlyOwnerOrOfficer {
+    function set(uint256 _pid, uint256 _allocPoint, uint16 _depositFee, uint16 _withdrawFee) public onlyOwnerOrOfficer {
         require(_depositFee <= 1500, "Deposit fee cannot be higher than 15%");
         require(_withdrawFee <= 1500, "Withdarw fee cannot be higher than 15%");
         massUpdatePools();
@@ -260,35 +199,22 @@ contract tFarm1 is Ownable {
         pool.allocPoint = _allocPoint;
         pool.depositFee = _depositFee;
         pool.withdrawFee = _withdrawFee;
-        emit ModifyPool(
-            msg.sender,
-            _pid,
-            _allocPoint,
-            totalAllocPoint,
-            _depositFee,
-            _withdrawFee
-        );
+        emit ModifyPool(msg.sender, _pid, _allocPoint, totalAllocPoint, _depositFee, _withdrawFee);
     }
 
-    /// Return amount of accumulated rewards over the given time, according to the bath per second emission.
+    /// Return amount of accumulated rewards over the given time, according to the tub per second emission.
     /// @param _fromTime Time from which the generated rewards should be calculated
     /// @param _toTime Time to which the generated rewards should be calculated
-    function getGeneratedReward(uint256 _fromTime, uint256 _toTime)
-        public
-        view
-        returns (uint256)
-    {
+    function getGeneratedReward(uint256 _fromTime, uint256 _toTime) public view returns (uint256) {
         if (_fromTime >= _toTime) return 0;
         if (_toTime >= poolEndTime) {
             if (_fromTime >= poolEndTime) return 0;
-            if (_fromTime <= poolStartTime)
-                return (poolEndTime - poolStartTime) * bathPerSecond;
-            return (poolEndTime - _fromTime) * bathPerSecond;
+            if (_fromTime <= poolStartTime) return (poolEndTime - poolStartTime) * tubPerSecond;
+            return (poolEndTime - _fromTime) * tubPerSecond;
         } else {
             if (_toTime <= poolStartTime) return 0;
-            if (_fromTime <= poolStartTime)
-                return (_toTime - poolStartTime) * bathPerSecond;
-            return (_toTime - _fromTime) * bathPerSecond;
+            if (_fromTime <= poolStartTime) return (_toTime - poolStartTime) * tubPerSecond;
+            return (_toTime - _fromTime) * tubPerSecond;
         }
     }
 
@@ -298,29 +224,18 @@ contract tFarm1 is Ownable {
     /// @return Amount of pending rewards for specific user
     /// @dev To be used in UI
 
-    function pendingBaths(uint256 _pid, address _user)
-        external
-        view
-        returns (uint256)
-    {
+    function pendingTubs(uint256 _pid, address _user) external view returns (uint256) {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
-        uint256 accBathPerShare = pool.accBathPerShare;
+        uint256 accTubPerShare = pool.accTubPerShare;
         uint256 tokenSupply = pool.token.balanceOf(address(this));
         if (block.timestamp > pool.lastRewardTime && tokenSupply != 0) {
-            uint256 _generatedReward = getGeneratedReward(
-                pool.lastRewardTime,
-                block.timestamp
-            );
-            uint256 _bathReward = (_generatedReward * pool.allocPoint) /
-                totalAllocPoint;
-            accBathPerShare =
-                accBathPerShare +
-                ((_bathReward * 1e18) / tokenSupply);
+            uint256 _generatedReward = getGeneratedReward(pool.lastRewardTime, block.timestamp);
+            uint256 _tubReward = (_generatedReward * pool.allocPoint) / totalAllocPoint;
+            accTubPerShare = accTubPerShare + ((_tubReward * 1e18) / tokenSupply);
         }
-        return ((user.amount * accBathPerShare) / 1e18) - user.rewardDebt;
-    }
-
+        return ((user.amount * accTubPerShare) / 1e18) - user.rewardDebt;
+    }   
     /// Update reward variables for all pools.
     /// @dev Be careful of gas spending!
     function massUpdatePools() public {
@@ -347,15 +262,9 @@ contract tFarm1 is Ownable {
             totalAllocPoint = totalAllocPoint + pool.allocPoint;
         }
         if (totalAllocPoint > 0) {
-            uint256 _generatedReward = getGeneratedReward(
-                pool.lastRewardTime,
-                block.timestamp
-            );
-            uint256 _bathReward = (_generatedReward * pool.allocPoint) /
-                totalAllocPoint;
-            pool.accBathPerShare =
-                pool.accBathPerShare +
-                ((_bathReward * 1e18) / tokenSupply);
+            uint256 _generatedReward = getGeneratedReward(pool.lastRewardTime, block.timestamp);
+            uint256 _tubReward = (_generatedReward * pool.allocPoint) / totalAllocPoint;
+            pool.accTubPerShare = pool.accTubPerShare + ((_tubReward * 1e18) / tokenSupply);
         }
         pool.lastRewardTime = block.timestamp;
     }
@@ -369,33 +278,24 @@ contract tFarm1 is Ownable {
         UserInfo storage user = userInfo[_pid][_sender];
         updatePool(_pid);
         if (user.amount > 0) {
-            uint256 _pending = ((user.amount * pool.accBathPerShare) / 1e18) -
-                user.rewardDebt;
+            uint256 _pending = ((user.amount * pool.accTubPerShare) / 1e18) - user.rewardDebt;
             if (_pending > 0) {
-                safeBathTransfer(_sender, _pending);
+                safeTubTransfer(_sender, _pending);
                 emit RewardPaid(_sender, _pending);
             }
         }
         if (_amount > 0) {
-            if (pool.depositFee > 0) {
+            if(pool.depositFee > 0) {
                 uint256 depositFeeAmount = (_amount * pool.depositFee) / 10000;
-                pool.token.safeTransferFrom(
-                    _sender,
-                    feeCollector,
-                    depositFeeAmount
-                );
-                pool.token.safeTransferFrom(
-                    _sender,
-                    address(this),
-                    _amount - depositFeeAmount
-                );
+                pool.token.safeTransferFrom(_sender, feeCollector, depositFeeAmount);
+                pool.token.safeTransferFrom(_sender, address(this), _amount - depositFeeAmount);
                 user.amount = user.amount + (_amount - depositFeeAmount);
             } else {
                 pool.token.safeTransferFrom(_sender, address(this), _amount);
                 user.amount = user.amount + _amount;
             }
         }
-        user.rewardDebt = (user.amount * pool.accBathPerShare) / 1e18;
+        user.rewardDebt = (user.amount * pool.accTubPerShare) / 1e18;
         emit Deposit(_sender, _pid, _amount, pool.depositFee);
     }
 
@@ -408,28 +308,27 @@ contract tFarm1 is Ownable {
         UserInfo storage user = userInfo[_pid][_sender];
         require(user.amount >= _amount, "withdraw: not good");
         updatePool(_pid);
-        uint256 bathBalance = bath.balanceOf(address(this));
-        uint256 _pending = ((user.amount * pool.accBathPerShare) / 1e18) -
-            user.rewardDebt;
-
-        if (_pending > 0 && bathBalance > _pending) {
-            safeBathTransfer(_sender, _pending);
-            user.claimedBath = user.claimedBath + _pending;
-            pool.poolClaimedBath = pool.poolClaimedBath + _pending;
+        uint256 tubBalance = tub.balanceOf(address(this));
+        uint256 _pending = ((user.amount * pool.accTubPerShare) / 1e18) - user.rewardDebt;
+        
+        if (_pending > 0 && tubBalance > _pending) {
+            safeTubTransfer(_sender, _pending);
+            user.claimedTub = user.claimedTub + _pending;
+            pool.poolClaimedTub = pool.poolClaimedTub + _pending;
             emit RewardPaid(_sender, _pending);
         }
         if (_amount > 0) {
-            if (pool.withdrawFee > 0) {
-                uint256 withdrawFeeAmount = (_amount * pool.withdrawFee) /
-                    10000;
+            if(pool.withdrawFee > 0) {
+                uint256 withdrawFeeAmount = (_amount * pool.withdrawFee) / 10000;
                 pool.token.safeTransfer(feeCollector, withdrawFeeAmount);
                 pool.token.safeTransfer(_sender, _amount - withdrawFeeAmount);
-            } else {
+            }    
+            else {   
                 pool.token.safeTransfer(_sender, _amount);
             }
             user.amount = user.amount - _amount;
         }
-        user.rewardDebt = (user.amount * pool.accBathPerShare) / 1e18;
+        user.rewardDebt = (user.amount * pool.accTubPerShare) / 1e18;
 
         emit Withdraw(_sender, _pid, _amount, pool.withdrawFee);
     }
@@ -446,17 +345,17 @@ contract tFarm1 is Ownable {
         emit EmergencyWithdraw(msg.sender, _pid, _amount);
     }
 
-    /// Safe BATH transfer function.
+    /// Safe TUB transfer function.
     /// @param _to Recipient address of the transfer
     /// @param _amount Amount of tokens to be transferred
-    /// @dev Used just in case if rounding error causes pool to not have enough BATH.
-    function safeBathTransfer(address _to, uint256 _amount) internal {
-        uint256 _bathBal = bath.balanceOf(address(this));
-        if (_bathBal > 0) {
-            if (_amount > _bathBal) {
-                bath.safeTransfer(_to, _bathBal);
+    /// @dev Used just in case if rounding error causes pool to not have enough TUB.
+    function safeTubTransfer(address _to, uint256 _amount) internal {
+        uint256 _tubBal = tub.balanceOf(address(this));
+        if (_tubBal > 0) {
+            if (_amount > _tubBal) {
+                tub.safeTransfer(_to, _tubBal);
             } else {
-                bath.safeTransfer(_to, _amount);
+                tub.safeTransfer(_to, _amount);
             }
         }
     }
@@ -470,20 +369,14 @@ contract tFarm1 is Ownable {
         emit UpdateFeeCollector(msg.sender, address(_feeCollector));
     }
 
-    function clearReward(uint256 _amount, address _receiver)
-        public
-        onlyOwnerOrOfficer
-    {
-        safeBathTransfer(_receiver, _amount);
+    function clearReward(uint256 _amount, address _receiver) public onlyOwnerOrOfficer{
+        safeTubTransfer(_receiver, _amount);
     }
 
-    function updateEmissionRate(uint256 _bathPerSecond)
-        public
-        onlyOwnerOrOfficer
-    {
+    function updateEmissionRate(uint256 _tubPerSecond) public onlyOwnerOrOfficer {
         massUpdatePools();
-        emit EmissionRateUpdated(msg.sender, bathPerSecond, _bathPerSecond);
-        bathPerSecond = _bathPerSecond;
+        emit EmissionRateUpdated(msg.sender, tubPerSecond, _tubPerSecond);
+        tubPerSecond = _tubPerSecond;
     }
 
     /// Transferred tokens sent to the contract by mistake.
@@ -491,14 +384,10 @@ contract tFarm1 is Ownable {
     /// @param _amount Amount of tokens to be transferred
     /// @param _to Recipient address of the transfer
     /// @dev Can only be called by the Operator
-    function governanceRecoverUnsupported(
-        IERC20 _token,
-        uint256 _amount,
-        address _to
-    ) external onlyOwnerOrOfficer {
+    function governanceRecoverUnsupported(IERC20 _token, uint256 _amount, address _to) external onlyOwnerOrOfficer {
         if (block.timestamp < poolEndTime + 7 days) {
-            // do not allow to drain core token (BATH or lps) if less than 7 days after pool ends
-            require(_token != bath, "BATH");
+            // do not allow to drain core token (TUB or lps) if less than 7 days after pool ends
+            require(_token != tub, "TUB");
             uint256 length = poolInfo.length;
             for (uint256 pid = 0; pid < length; ++pid) {
                 PoolInfo storage pool = poolInfo[pid];
@@ -508,6 +397,6 @@ contract tFarm1 is Ownable {
         _token.safeTransfer(_to, _amount);
         emit RecoverUnsupported(msg.sender, address(_token), _amount, _to);
     }
-
-    receive() external payable {}
+    receive() external payable {
+    }
 }
