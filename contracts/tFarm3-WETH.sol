@@ -6,9 +6,9 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-// Note that this pool has no minter key of BATH (rewards).
+// Note that this pool has no minter key of WETH (rewards).
 // Instead, rewards will be sent to this pool at the beginning.
-contract tGenesisFarm is Ownable {
+contract tFarm3 is Ownable {
     using SafeERC20 for IERC20;
 
     /// User-specific information.
@@ -17,8 +17,8 @@ contract tGenesisFarm is Ownable {
         uint256 amount;
         /// How many unclaimed rewards does the user have pending.
         uint256 rewardDebt;
-        /// How many baths the user claimed.
-        uint256 claimedBath;
+        /// How many wBNB the user claimed.
+        uint256 claimedwETH;
     }
 
     /// Pool-specific information.
@@ -27,23 +27,23 @@ contract tGenesisFarm is Ownable {
         IERC20 token;
         /// Allocation points assigned to the pool.
         /// @dev Rewards are distributed in the pool according to formula:
-        //      (allocPoint / totalAllocPoint) * bathPerSecond
+        //      (allocPoint / totalAllocPoint) * wETHPerSecond
         uint256 allocPoint;
         /// Last time the rewards distribution was calculated.
         uint256 lastRewardTime;
-        /// Accumulated BATH per share.
-        uint256 accBathPerShare;
+        /// Accumulated WETH per share.
+        uint256 accwETHPerShare;
         /// Deposit fee in %, where 100 == 1%.
         uint16 depositFee;
         uint16 withdrawFee;
         /// Is the pool rewards emission started.
         bool isStarted;
         /// Pool claimed Amount
-        uint256 poolClaimedBath;
+        uint256 poolClaimedwETH;
     }
 
     /// Reward token.
-    IERC20 public bath;
+    IERC20 public wETH;
 
     /// Address where the deposit fees are transferred.
     address public feeCollector;
@@ -58,18 +58,16 @@ contract tGenesisFarm is Ownable {
     /// Total allocation points. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
 
-    /// The time when BATH emissions start.
+    /// The time when WETH emissions start.
     uint256 public poolStartTime;
 
-    /// The time when BATH emissions end.
+    /// The time when WETH emissions end.
     uint256 public poolEndTime;
 
-    /// Amount of BATH emitted each second.
-    uint256 public bathPerSecond;
+    /// Amount of WETH emitted each second.
+    uint256 public wETHPerSecond;
     /// Running time of emissions (in seconds).
     uint256 public runningTime;
-    /// Total amount of tokens to be emitted.
-    uint256 public totalRewards;
 
     /* Events */
 
@@ -121,16 +119,16 @@ contract tGenesisFarm is Ownable {
     );
 
     /// Default constructor.
-    /// @param _bathAddress Address of BATH token.
+    /// @param _wETHAddress Address of WETH token.
     /// @param _poolStartTime Emissions start time.
     /// @param _runningTime Running time of emissions (in seconds).
-    /// @param _bathPerSecond bath Per Second
+    /// @param _wETHPerSecond wETH Per Second
     /// @param _feeCollector Address where the deposit fees are transferred.
     constructor(
-        address _bathAddress,
+        address _wETHAddress,
         uint256 _poolStartTime,
         uint256 _runningTime,
-        uint256 _bathPerSecond,
+        uint256 _wETHPerSecond,
         address _feeCollector
     ) {
         require(block.timestamp < _poolStartTime, "late");
@@ -140,13 +138,13 @@ contract tGenesisFarm is Ownable {
             "Running time has to be at least 1 day"
         );
 
-        if (_bathAddress != address(0)) bath = IERC20(_bathAddress);
+        if (_wETHAddress != address(0)) wETH = IERC20(_wETHAddress);
 
         poolStartTime = _poolStartTime;
         runningTime = _runningTime;
         poolEndTime = poolStartTime + runningTime;
 
-        bathPerSecond = _bathPerSecond;
+        wETHPerSecond = _wETHPerSecond;
 
         feeCollector = _feeCollector;
         poolofficer = msg.sender;
@@ -167,7 +165,7 @@ contract tGenesisFarm is Ownable {
         for (uint256 pid = 0; pid < length; ++pid) {
             require(
                 poolInfo[pid].token != _token,
-                "BathGenesisRewardPool: existing pool?"
+                "wETHGenesisRewardPool: existing pool?"
             );
         }
     }
@@ -217,11 +215,11 @@ contract tGenesisFarm is Ownable {
                 token: _token,
                 allocPoint: _allocPoint,
                 lastRewardTime: _lastRewardTime,
-                accBathPerShare: 0,
+                accwETHPerShare: 0,
                 depositFee: _depositFee,
                 withdrawFee: _withdrawFee,
                 isStarted: _isStarted,
-                poolClaimedBath: 0
+                poolClaimedwETH: 0
             })
         );
         if (_isStarted) {
@@ -270,7 +268,7 @@ contract tGenesisFarm is Ownable {
         );
     }
 
-    /// Return amount of accumulated rewards over the given time, according to the bath per second emission.
+    /// Return amount of accumulated rewards over the given time, according to the wETH per second emission.
     /// @param _fromTime Time from which the generated rewards should be calculated
     /// @param _toTime Time to which the generated rewards should be calculated
     function getGeneratedReward(uint256 _fromTime, uint256 _toTime)
@@ -282,13 +280,13 @@ contract tGenesisFarm is Ownable {
         if (_toTime >= poolEndTime) {
             if (_fromTime >= poolEndTime) return 0;
             if (_fromTime <= poolStartTime)
-                return (poolEndTime - poolStartTime) * bathPerSecond;
-            return (poolEndTime - _fromTime) * bathPerSecond;
+                return (poolEndTime - poolStartTime) * wETHPerSecond;
+            return (poolEndTime - _fromTime) * wETHPerSecond;
         } else {
             if (_toTime <= poolStartTime) return 0;
             if (_fromTime <= poolStartTime)
-                return (_toTime - poolStartTime) * bathPerSecond;
-            return (_toTime - _fromTime) * bathPerSecond;
+                return (_toTime - poolStartTime) * wETHPerSecond;
+            return (_toTime - _fromTime) * wETHPerSecond;
         }
     }
 
@@ -298,27 +296,27 @@ contract tGenesisFarm is Ownable {
     /// @return Amount of pending rewards for specific user
     /// @dev To be used in UI
 
-    function pendingBaths(uint256 _pid, address _user)
+    function pendingwETHs(uint256 _pid, address _user)
         external
         view
         returns (uint256)
     {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
-        uint256 accBathPerShare = pool.accBathPerShare;
+        uint256 accwETHPerShare = pool.accwETHPerShare;
         uint256 tokenSupply = pool.token.balanceOf(address(this));
         if (block.timestamp > pool.lastRewardTime && tokenSupply != 0) {
             uint256 _generatedReward = getGeneratedReward(
                 pool.lastRewardTime,
                 block.timestamp
             );
-            uint256 _bathReward = (_generatedReward * pool.allocPoint) /
+            uint256 _wETHReward = (_generatedReward * pool.allocPoint) /
                 totalAllocPoint;
-            accBathPerShare =
-                accBathPerShare +
-                ((_bathReward * 1e18) / tokenSupply);
+            accwETHPerShare =
+                accwETHPerShare +
+                ((_wETHReward * 1e18) / tokenSupply);
         }
-        return ((user.amount * accBathPerShare) / 1e18) - user.rewardDebt;
+        return ((user.amount * accwETHPerShare) / 1e18) - user.rewardDebt;
     }
 
     /// Update reward variables for all pools.
@@ -351,11 +349,11 @@ contract tGenesisFarm is Ownable {
                 pool.lastRewardTime,
                 block.timestamp
             );
-            uint256 _bathReward = (_generatedReward * pool.allocPoint) /
+            uint256 _wETHReward = (_generatedReward * pool.allocPoint) /
                 totalAllocPoint;
-            pool.accBathPerShare =
-                pool.accBathPerShare +
-                ((_bathReward * 1e18) / tokenSupply);
+            pool.accwETHPerShare =
+                pool.accwETHPerShare +
+                ((_wETHReward * 1e18) / tokenSupply);
         }
         pool.lastRewardTime = block.timestamp;
     }
@@ -369,10 +367,10 @@ contract tGenesisFarm is Ownable {
         UserInfo storage user = userInfo[_pid][_sender];
         updatePool(_pid);
         if (user.amount > 0) {
-            uint256 _pending = ((user.amount * pool.accBathPerShare) / 1e18) -
+            uint256 _pending = ((user.amount * pool.accwETHPerShare) / 1e18) -
                 user.rewardDebt;
             if (_pending > 0) {
-                safeBathTransfer(_sender, _pending);
+                safewETHTransfer(_sender, _pending);
                 emit RewardPaid(_sender, _pending);
             }
         }
@@ -395,7 +393,7 @@ contract tGenesisFarm is Ownable {
                 user.amount = user.amount + _amount;
             }
         }
-        user.rewardDebt = (user.amount * pool.accBathPerShare) / 1e18;
+        user.rewardDebt = (user.amount * pool.accwETHPerShare) / 1e18;
         emit Deposit(_sender, _pid, _amount, pool.depositFee);
     }
 
@@ -408,14 +406,14 @@ contract tGenesisFarm is Ownable {
         UserInfo storage user = userInfo[_pid][_sender];
         require(user.amount >= _amount, "withdraw: not good");
         updatePool(_pid);
-        uint256 bathBalance = bath.balanceOf(address(this));
-        uint256 _pending = ((user.amount * pool.accBathPerShare) / 1e18) -
+        uint256 wETHBalance = wETH.balanceOf(address(this));
+        uint256 _pending = ((user.amount * pool.accwETHPerShare) / 1e18) -
             user.rewardDebt;
 
-        if (_pending > 0 && bathBalance > _pending) {
-            safeBathTransfer(_sender, _pending);
-            user.claimedBath = user.claimedBath + _pending;
-            pool.poolClaimedBath = pool.poolClaimedBath + _pending;
+        if (_pending > 0 && wETHBalance > _pending) {
+            safewETHTransfer(_sender, _pending);
+            user.claimedwETH = user.claimedwETH + _pending;
+            pool.poolClaimedwETH = pool.poolClaimedwETH + _pending;
             emit RewardPaid(_sender, _pending);
         }
         if (_amount > 0) {
@@ -429,7 +427,7 @@ contract tGenesisFarm is Ownable {
             }
             user.amount = user.amount - _amount;
         }
-        user.rewardDebt = (user.amount * pool.accBathPerShare) / 1e18;
+        user.rewardDebt = (user.amount * pool.accwETHPerShare) / 1e18;
 
         emit Withdraw(_sender, _pid, _amount, pool.withdrawFee);
     }
@@ -446,17 +444,17 @@ contract tGenesisFarm is Ownable {
         emit EmergencyWithdraw(msg.sender, _pid, _amount);
     }
 
-    /// Safe BATH transfer function.
+    /// Safe WETH transfer function.
     /// @param _to Recipient address of the transfer
     /// @param _amount Amount of tokens to be transferred
-    /// @dev Used just in case if rounding error causes pool to not have enough BATH.
-    function safeBathTransfer(address _to, uint256 _amount) internal {
-        uint256 _bathBal = bath.balanceOf(address(this));
-        if (_bathBal > 0) {
-            if (_amount > _bathBal) {
-                bath.safeTransfer(_to, _bathBal);
+    /// @dev Used just in case if rounding error causes pool to not have enough WETH.
+    function safewETHTransfer(address _to, uint256 _amount) internal {
+        uint256 _wETHBal = wETH.balanceOf(address(this));
+        if (_wETHBal > 0) {
+            if (_amount > _wETHBal) {
+                wETH.safeTransfer(_to, _wETHBal);
             } else {
-                bath.safeTransfer(_to, _amount);
+                wETH.safeTransfer(_to, _amount);
             }
         }
     }
@@ -474,16 +472,16 @@ contract tGenesisFarm is Ownable {
         public
         onlyOwnerOrOfficer
     {
-        safeBathTransfer(_receiver, _amount);
+        safewETHTransfer(_receiver, _amount);
     }
 
-    function updateEmissionRate(uint256 _bathPerSecond)
+    function updateEmissionRate(uint256 _wETHPerSecond)
         public
         onlyOwnerOrOfficer
     {
         massUpdatePools();
-        emit EmissionRateUpdated(msg.sender, bathPerSecond, _bathPerSecond);
-        bathPerSecond = _bathPerSecond;
+        emit EmissionRateUpdated(msg.sender, wETHPerSecond, _wETHPerSecond);
+        wETHPerSecond = _wETHPerSecond;
     }
 
     /// Transferred tokens sent to the contract by mistake.
@@ -497,8 +495,8 @@ contract tGenesisFarm is Ownable {
         address _to
     ) external onlyOwnerOrOfficer {
         if (block.timestamp < poolEndTime + 7 days) {
-            // do not allow to drain core token (BATH or lps) if less than 7 days after pool ends
-            require(_token != bath, "BATH");
+            // do not allow to drain core token (WETH or lps) if less than 7 days after pool ends
+            require(_token != wETH, "WETH");
             uint256 length = poolInfo.length;
             for (uint256 pid = 0; pid < length; ++pid) {
                 PoolInfo storage pool = poolInfo[pid];

@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 // Note that this pool has no minter key of BATH (rewards).
 // Instead, rewards will be sent to this pool at the beginning.
-contract tGenesisFarm is Ownable {
+contract tFarm1 is Ownable {
     using SafeERC20 for IERC20;
 
     /// User-specific information.
@@ -43,7 +43,7 @@ contract tGenesisFarm is Ownable {
     }
 
     /// Reward token.
-    IERC20 public bath;
+    IERC20 public tub;
 
     /// Address where the deposit fees are transferred.
     address public feeCollector;

@@ -12,9 +12,9 @@ contract BathToken is IERC20, Ownable {
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
 
-    string public constant name = "Bath";
-    string public constant symbol = "BATH";
-    uint8 public constant decimals = 8;
+    string public constant name = "tBath";
+    string public constant symbol = "tBATH";
+    uint8 public constant decimals = 18;
 
     uint256 private _totalSupply = 0;
 
@@ -24,12 +24,12 @@ contract BathToken is IERC20, Ownable {
     mapping(address => bool) public isWhitelisted;
 
     event TransferFee(address sender, address recipient, uint256 amount);
-    event SetBeneficiaryFeePercentage(uint8 feePercentage);
-    event SetBeneficiaryAddress(address beneficiaryAddress);
+    event SetFeePercentage(uint8 feePercentage);
+    event SetTaxAddress(address beneficiaryAddress);
 
     constructor(uint8 taxPercent_ ,address taxAddress_) {
         _balances[msg.sender] = _totalSupply;
-        taxPercent = taxPercent_; //1000 is 100% 
+        taxPercent = taxPercent_; //10000 is 100% 
         taxAddress = taxAddress_;
         isWhitelisted[msg.sender] = true;
         isWhitelisted[taxAddress] = true;
@@ -70,7 +70,7 @@ contract BathToken is IERC20, Ownable {
         _transfer(sender, recipient, amount);
 
         uint256 currentAllowance = _allowances[sender][_msgSender()];
-        require(currentAllowance >= amount, "ERC20: transfer amount exceeds allowance");
+        require(currentAllowance >= amount, "BATH: transfer amount exceeds allowance");
         unchecked {
             _approve(sender, _msgSender(), currentAllowance - amount);
         }
@@ -85,7 +85,7 @@ contract BathToken is IERC20, Ownable {
 
     function decreaseAllowance(address spender, uint256 subtractedValue) external returns (bool) {
         uint256 currentAllowance = _allowances[_msgSender()][spender];
-        require(currentAllowance >= subtractedValue, "ERC20: decreased allowance below zero");
+        require(currentAllowance >= subtractedValue, "BATH: decreased allowance below zero");
         unchecked {
             _approve(_msgSender(), spender, currentAllowance - subtractedValue);
         }
@@ -93,16 +93,16 @@ contract BathToken is IERC20, Ownable {
         return true;
     }
 
-    function setBeneficiaryFeePercentage(uint8 taxPercent_) external onlyOwner {
-        require(taxPercent_ <= 100, "Bath: transaction fee percentage exceeds 10%");
+    function setFeePercentage(uint8 taxPercent_) external onlyOwner {
+        require(taxPercent_ <= 1500, "Bath: transaction fee percentage exceeds 15   %");
         require(taxPercent_ >= 0, "Bath: transaction fee percentage equals 0");
         taxPercent = taxPercent_;
-        emit SetBeneficiaryFeePercentage(taxPercent);
+        emit SetFeePercentage(taxPercent);
     }
     
-    function setBeneficiaryAddress(address taxAddress_) external onlyOwner {
+    function setTaxAddress(address taxAddress_) external onlyOwner {
         taxAddress = taxAddress_;
-        emit SetBeneficiaryAddress(taxAddress);
+        emit SetTaxAddress(taxAddress);
     }
   
     function setWhitelist(address address_, bool isWhitelist) external onlyOwner {
@@ -139,7 +139,7 @@ contract BathToken is IERC20, Ownable {
         if (isWhitelisted[sender] || isWhitelisted[recipient]) {
             _balances[recipient] += receiveAmount;
         } else {
-            uint256 taxAmount = (amount * taxPercent) / 1000;
+            uint256 taxAmount = (amount * taxPercent) / 10000;
             receiveAmount = amount - taxAmount;
             _balances[taxAddress] += taxAmount;
             _balances[recipient] += receiveAmount;
