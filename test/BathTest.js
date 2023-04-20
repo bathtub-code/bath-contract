@@ -1,98 +1,69 @@
-
+// Import necessary modules from Hardhat
 const { expect } = require("chai");
-const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
+const { ethers } = require("hardhat");
 
-describe("Bath Token contract", function () {
-  
-  async function deployTokenFixture() {
-    // Get the ContractFactory and Signers here.
-    const BathTokenContract = await ethers.getContractFactory("Bath");
-    const [owner, addr1, addr2] = await ethers.getSigners();
+// Start describing the test suite
+describe("BathToken", function() {
+    let bathToken;
+    let owner;
+    let addr1;
+    let addr2;
 
-    // To deploy our contract, we just have to call Token.deploy() and await
-    // its deployed() method, which happens once its transaction has been
-    // mined.
-    const bathToken = await BathTokenContract.deploy();
+    // Deploy the BathToken contract before each test case
+    beforeEach(async function() {
+        [owner, addr1, addr2] = await ethers.getSigners();
+        const BathToken = await ethers.getContractFactory("BathToken");
+        const taxPercent = 0;
+        const taxAddress = "0xe5C538024188eD687a26C88390c7433c6a09F909";
 
-    await bathToken.deployed();
-
-    // Fixtures can return anything you consider useful for your tests
-    return { BathTokenContract, bathToken, owner, addr1, addr2 };
-  }
-
-  // You can nest describe calls to create subsections.
-  describe("Deployment", function () {
-
-    it("Should set the right owner", async function () {
-      // We use loadFixture to setup our environment, and then assert that
-      // things went well
-      const { bathToken, owner } = await loadFixture(deployTokenFixture);
-
-      // `expect` receives a value and wraps it in an assertion object. These
-      // objects have a lot of utility methods to assert values.
-
-      // This test expects the owner variable stored in the contract to be
-      // equal to our Signer's owner.
-      expect(await bathToken.owner()).to.equal(owner.address);
+        bathToken = await BathToken.connect(owner).deploy(taxPercent,taxAddress );
     });
 
-    it("Should assign the total supply of tokens to the owner", async function () {
-      const { bathToken, owner } = await loadFixture(deployTokenFixture);
-      const ownerBalance = await bathToken.balanceOf(owner.address);
-      expect(await bathToken.totalSupply()).to.equal(ownerBalance);
-    });
-  });
+    // Test the initial state of the BathToken contract
+    describe("Deployment", function() {
+        it("Should set the right owner", async function() {
+            expect(await bathToken.owner()).to.equal(owner.address);
+        });
 
-  describe("Transactions", function () {
-    it("Should transfer tokens between accounts", async function () {
-      const { bathToken, owner, addr1, addr2 } = await loadFixture(
-        deployTokenFixture
-      );
-      // Transfer 50 tokens from owner to addr1
-      await expect(
-        bathToken.transfer(addr1.address, 50)
-      ).to.changeTokenBalances(bathToken, [owner, addr1], [-50, 50]);
-
-      // Transfer 50 tokens from addr1 to addr2
-      // We use .connect(signer) to send a transaction from another account
-      await expect(
-        bathToken.connect(addr1).transfer(addr2.address, 50)
-      ).to.changeTokenBalances(bathToken, [addr1, addr2], [-50, 50]);
+        it("Should set the total supply to 0", async function() {
+            expect(await bathToken.totalSupply()).to.equal(0);
+        });
     });
 
-    it("Should emit Transfer events", async function () {
-      const { hardhatToken, owner, addr1, addr2 } = await loadFixture(
-        deployTokenFixture
-      );
+    // Test the minting functionality of the BathToken contract
+    describe("Minting", function() {
+        it("Should mint 1000 tokens to the contract owner", async function() {
+        await bathToken.connect(owner).mint(1000);
+        expect(await bathToken.balanceOf(owner.address)).to.equal(1000);
+        expect(await bathToken.totalSupply()).to.equal(1000);
+        });
 
-      // Transfer 50 tokens from owner to addr1
-      await expect(bathToken.transfer(addr1.address, 50))
-        .to.emit(bathToken, "Transfer")
-        .withArgs(owner.address, addr1.address, 50);
+        it("Should revert when non-owner tries to mint", async function() {
+        await expect(bathToken.connect(addr1).mint(1000))
+            .to.be.revertedWith("Ownable: caller is not the owner");
+        });
 
-      // Transfer 50 tokens from addr1 to addr2
-      // We use .connect(signer) to send a transaction from another account
-      await expect(bathToken.connect(addr1).transfer(addr2.address, 50))
-        .to.emit(bathToken, "Transfer")
-        .withArgs(addr1.address, addr2.address, 50);
     });
 
-    it("Should fail if sender doesn't have enough tokens", async function () {
-      const { bathToken, owner, addr1 } = await loadFixture(
-        deployTokenFixture
-      );
-      const initialOwnerBalance = await bathToken.balanceOf(owner.address);
+    // Test the token transfer functionality of the BathToken contract
+    describe("Transfers", function() {
 
-      // Try to send 1 token from addr1 (0 tokens) to owner.
-      // `require` will evaluate false and revert the transaction.
-      await expect(
-        bathToken.connect(addr1).transfer(owner.address, 1)
-      ).to.be.revertedWith("Not enough tokens");
+        beforeEach(async function() {
+        //await bathToken.connect(owner).mint(addr1.address, 1000);
+            await bathToken.connect(owner).mint(1000);
+        });
+    
+        it("Should transfer tokens between two accounts", async function() {
+        // Transfer 50 tokens from owner to addr1
+        await expect(
+            bathToken.transfer(addr1.address, 50)
+        ).to.changeTokenBalances(bathToken, [owner, addr1], [-50, 50]);
 
-      // Owner balance shouldn't have changed.
-      expect(await bathToken.balanceOf(owner.address)).to.equal(
-        initialOwnerBalance
-      );
+        // Transfer 50 tokens from addr1 to addr2
+        // We use .connect(signer) to send a transaction from another account
+        await expect(
+            bathToken.connect(addr1).transfer(addr2.address, 50)
+        ).to.changeTokenBalances(bathToken, [addr1, addr2], [-50, 50]);
+        });
     });
-  });
 });
