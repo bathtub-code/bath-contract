@@ -40,6 +40,8 @@ contract Jacuzzi is Ownable {
         bool isStarted;
         /// Pool claimed Amount
         uint256 poolClaimedBath;
+        /// Is the pool expired or not.
+        bool isExpired;
     }
 
     /// Reward token.
@@ -173,7 +175,8 @@ contract Jacuzzi is Ownable {
             depositFee : _depositFee,
             withdrawFee : _withdrawFee,
             isStarted : _isStarted,
-            poolClaimedBath : 0
+            poolClaimedBath : 0,
+            isExpired : false
             }));
         if (_isStarted) {
             totalAllocPoint = totalAllocPoint + _allocPoint;
@@ -229,7 +232,7 @@ contract Jacuzzi is Ownable {
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accBathPerShare = pool.accBathPerShare;
         uint256 tokenSupply = pool.token.balanceOf(address(this));
-        if (block.timestamp > pool.lastRewardTime && tokenSupply != 0) {
+        if (block.timestamp > pool.lastRewardTime && tokenSupply != 0 && pool.isExpired != true) {
             uint256 _generatedReward = getGeneratedReward(pool.lastRewardTime, block.timestamp);
             uint256 _bathReward = (_generatedReward * pool.allocPoint) / totalAllocPoint;
             accBathPerShare = accBathPerShare + ((_bathReward * 1e18) / tokenSupply);
@@ -250,6 +253,9 @@ contract Jacuzzi is Ownable {
     function updatePool(uint256 _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
         if (block.timestamp <= pool.lastRewardTime) {
+            return;
+        }
+        if (pool.isExpired) {
             return;
         }
         uint256 tokenSupply = pool.token.balanceOf(address(this));
@@ -372,7 +378,12 @@ contract Jacuzzi is Ownable {
     function clearReward(uint256 _amount, address _receiver) public onlyOwnerOrOfficer{
         safeBathTransfer(_receiver, _amount);
     }
-
+    
+    function remove(uint256 _pid) public onlyOwnerOrOfficer {
+        massUpdatePools();
+        PoolInfo storage pool = poolInfo[_pid];
+        pool.isExpired = true;
+    }
     function updateEmissionRate(uint256 _bathPerSecond) public onlyOwnerOrOfficer {
         massUpdatePools();
         emit EmissionRateUpdated(msg.sender, bathPerSecond, _bathPerSecond);

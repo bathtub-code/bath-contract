@@ -40,6 +40,8 @@ contract SteamRoom is Ownable {
         bool isStarted;
         /// Pool claimed Amount
         uint256 poolClaimedTub;
+        /// Is the pool expired or not.
+        bool isExpired;
     }
 
     /// Reward token.
@@ -173,7 +175,8 @@ contract SteamRoom is Ownable {
             depositFee : _depositFee,
             withdrawFee : _withdrawFee,
             isStarted : _isStarted,
-            poolClaimedTub : 0
+            poolClaimedTub : 0,
+            isExpired : false
             }));
         if (_isStarted) {
             totalAllocPoint = totalAllocPoint + _allocPoint;
@@ -229,7 +232,7 @@ contract SteamRoom is Ownable {
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accTubPerShare = pool.accTubPerShare;
         uint256 tokenSupply = pool.token.balanceOf(address(this));
-        if (block.timestamp > pool.lastRewardTime && tokenSupply != 0) {
+        if (block.timestamp > pool.lastRewardTime && tokenSupply != 0 && pool.isExpired != true) {
             uint256 _generatedReward = getGeneratedReward(pool.lastRewardTime, block.timestamp);
             uint256 _tubReward = (_generatedReward * pool.allocPoint) / totalAllocPoint;
             accTubPerShare = accTubPerShare + ((_tubReward * 1e18) / tokenSupply);
@@ -250,6 +253,9 @@ contract SteamRoom is Ownable {
     function updatePool(uint256 _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
         if (block.timestamp <= pool.lastRewardTime) {
+            return;
+        }
+        if (pool.isExpired) {
             return;
         }
         uint256 tokenSupply = pool.token.balanceOf(address(this));
@@ -378,7 +384,11 @@ contract SteamRoom is Ownable {
         emit EmissionRateUpdated(msg.sender, tubPerSecond, _tubPerSecond);
         tubPerSecond = _tubPerSecond;
     }
-
+    function remove(uint256 _pid) public onlyOwnerOrOfficer {
+        massUpdatePools();
+        PoolInfo storage pool = poolInfo[_pid];
+        pool.isExpired = true;
+    }
     /// Transferred tokens sent to the contract by mistake.
     /// @param _token Address of token to be transferred (cannot be staking nor the reward token)
     /// @param _amount Amount of tokens to be transferred

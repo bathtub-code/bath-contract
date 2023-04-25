@@ -1,31 +1,27 @@
 const hre = require("hardhat");
 
 async function main() {
-    const [deployer] = await ethers.getSigners();
-  
-    console.log("Deploying contracts with the account:", deployer.address);
-  
-    console.log("Account balance:", (await deployer.getBalance()).toString());
-  
-    const BathTokenContract = await ethers.getContractFactory("BathToken");
+  const [deployer] = await ethers.getSigners();
 
-    const taxRate = 5;
-    const taxCollectorAddress = "0xe5C538024188eD687a26C88390c7433c6a09F909";
+  console.log("Deploying contracts with the account:", deployer.address);
 
-    const BathToken = await BathTokenContract.deploy(taxRate,taxCollectorAddress);
-  
-    console.log("Token address:", BathToken.address);
+  console.log("Account balance:", (await deployer.getBalance()).toString());
 
-    await hre.run("verify:verify", {
-      address: BathToken.address,
-      constructorArguments: [taxRate, taxCollectorAddress],
-    });
+  const BathTokenContract = await ethers.getContractFactory("BathToken");
 
-  }
-  
-  main()
-    .then(() => process.exit(0))
-    .catch((error) => {
-      console.error(error);
-      process.exit(1);
-    });
+  const buyTax = 500;
+  const sellTax = 1000;
+  const taxCollectorAddress = "0xe8f082A0831ECb553023f9de03f7e8fBd8EFc15E";
+  const uniswapV2Router = "0x9ac64cc6e4415144c455bd8e4837fea55603e5c3";
+  const BathToken = await BathTokenContract.deploy(buyTax, sellTax, taxCollectorAddress, uniswapV2Router);
+
+  console.log("Token address:", BathToken.address);
+
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

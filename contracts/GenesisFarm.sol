@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 // Note that this pool has no minter key of BATH (rewards).
 // Instead, rewards will be sent to this pool at the beginning.
-contract tGenesisFarm is Ownable {
+contract GenesisFarm is Ownable {
     using SafeERC20 for IERC20;
 
     /// User-specific information.
@@ -26,7 +26,7 @@ contract tGenesisFarm is Ownable {
         /// Address of the token staked in the pool.
         IERC20 token;
         /// Allocation points assigned to the pool.
-        /// @dev Rewards are distributed in the pool according to formula:
+        /// @dev Rewards are distributed in the pool according to formula: 
         //      (allocPoint / totalAllocPoint) * bathPerSecond
         uint256 allocPoint;
         /// Last time the rewards distribution was calculated.
@@ -40,6 +40,8 @@ contract tGenesisFarm is Ownable {
         bool isStarted;
         /// Pool claimed Amount
         uint256 poolClaimedBath;
+        /// Is the pool expired or not.
+        bool isExpired;
     }
 
     /// Reward token.
@@ -73,52 +75,15 @@ contract tGenesisFarm is Ownable {
 
     /* Events */
 
-    event AddPool(
-        address indexed user,
-        uint256 indexed pid,
-        uint256 allocPoint,
-        uint256 totalAllocPoint,
-        uint16 depositFee,
-        uint16 withdrawFee
-    );
-    event ModifyPool(
-        address indexed user,
-        uint256 indexed pid,
-        uint256 allocPoint,
-        uint256 totalAllocPoint,
-        uint16 depositFee,
-        uint16 withdrawFee
-    );
-    event Deposit(
-        address indexed user,
-        uint256 indexed pid,
-        uint256 amount,
-        uint256 depositFee
-    );
-    event Withdraw(
-        address indexed user,
-        uint256 indexed pid,
-        uint256 amount,
-        uint16 withdrawFee
-    );
-    event EmergencyWithdraw(
-        address indexed user,
-        uint256 indexed pid,
-        uint256 amount
-    );
+    event AddPool(address indexed user, uint256 indexed pid, uint256 allocPoint, uint256 totalAllocPoint, uint16 depositFee, uint16 withdrawFee);
+    event ModifyPool(address indexed user, uint256 indexed pid, uint256 allocPoint, uint256 totalAllocPoint, uint16 depositFee, uint16 withdrawFee);
+    event Deposit(address indexed user, uint256 indexed pid, uint256 amount, uint256 depositFee);
+    event Withdraw(address indexed user, uint256 indexed pid, uint256 amount, uint16 withdrawFee);
+    event EmergencyWithdraw(address indexed user, uint256 indexed pid, uint256 amount);
     event RewardPaid(address indexed user, uint256 amount);
     event UpdateFeeCollector(address indexed user, address feeCollector);
-    event RecoverUnsupported(
-        address indexed user,
-        address token,
-        uint256 amount,
-        address targetAddress
-    );
-    event EmissionRateUpdated(
-        address indexed caller,
-        uint256 previousAmount,
-        uint256 newAmount
-    );
+    event RecoverUnsupported(address indexed user, address token, uint256 amount, address targetAddress);
+    event EmissionRateUpdated(address indexed caller, uint256 previousAmount, uint256 newAmount);
 
     /// Default constructor.
     /// @param _bathAddress Address of BATH token.
@@ -133,12 +98,9 @@ contract tGenesisFarm is Ownable {
         uint256 _bathPerSecond,
         address _feeCollector
     ) {
-        require(block.timestamp < _poolStartTime, "late");
+//        require(block.timestamp < _poolStartTime, "late");
         require(_feeCollector != address(0), "Address cannot be 0");
-        require(
-            _runningTime >= 1 days,
-            "Running time has to be at least 1 day"
-        );
+        require(_runningTime >= 1 days, "Running time has to be at least 1 day");
 
         if (_bathAddress != address(0)) bath = IERC20(_bathAddress);
 
@@ -151,24 +113,16 @@ contract tGenesisFarm is Ownable {
         feeCollector = _feeCollector;
         poolofficer = msg.sender;
     }
-
     modifier onlyOwnerOrOfficer() {
-        require(
-            owner() == msg.sender || poolofficer == msg.sender,
-            "Caller is not the owner or the officer"
-        );
+        require(owner() == msg.sender || poolofficer == msg.sender, "Caller is not the owner or the officer");
         _;
     }
-
     /// Check if a pool already exists for specified token.
     /// @param _token Address of token to check for existing pools
     function checkPoolDuplicate(IERC20 _token) internal view {
         uint256 length = poolInfo.length;
         for (uint256 pid = 0; pid < length; ++pid) {
-            require(
-                poolInfo[pid].token != _token,
-                "BathGenesisRewardPool: existing pool?"
-            );
+            require(poolInfo[pid].token != _token, "BathGenesisRewardPool: existing pool?");
         }
     }
 
@@ -189,7 +143,7 @@ contract tGenesisFarm is Ownable {
         bool _withUpdate,
         uint256 _lastRewardTime
     ) public onlyOwnerOrOfficer {
-        _token.balanceOf(address(this)); // guard to revert calls that try to add non-IERC20 addresses
+        _token.balanceOf(address(this));    // guard to revert calls that try to add non-IERC20 addresses
         require(_depositFee <= 1500, "Deposit fee cannot be higher than 15%");
         checkPoolDuplicate(_token);
         if (_withUpdate) {
@@ -210,32 +164,26 @@ contract tGenesisFarm is Ownable {
                 _lastRewardTime = block.timestamp;
             }
         }
-        bool _isStarted = (_lastRewardTime <= poolStartTime) ||
-            (_lastRewardTime <= block.timestamp);
-        poolInfo.push(
-            PoolInfo({
-                token: _token,
-                allocPoint: _allocPoint,
-                lastRewardTime: _lastRewardTime,
-                accBathPerShare: 0,
-                depositFee: _depositFee,
-                withdrawFee: _withdrawFee,
-                isStarted: _isStarted,
-                poolClaimedBath: 0
-            })
-        );
+        bool _isStarted =
+        (_lastRewardTime <= poolStartTime) ||
+        (_lastRewardTime <= block.timestamp);
+        poolInfo.push(PoolInfo({
+            token : _token,
+            allocPoint : _allocPoint,
+            lastRewardTime : _lastRewardTime,
+            accBathPerShare : 0,
+            depositFee : _depositFee,
+            withdrawFee : _withdrawFee,
+            isStarted : _isStarted,
+            poolClaimedBath : 0,
+            isExpired : false
+            
+            }));
         if (_isStarted) {
             totalAllocPoint = totalAllocPoint + _allocPoint;
         }
 
-        emit AddPool(
-            msg.sender,
-            poolInfo.length - 1,
-            _allocPoint,
-            totalAllocPoint,
-            _depositFee,
-            _withdrawFee
-        );
+        emit AddPool(msg.sender, poolInfo.length - 1, _allocPoint, totalAllocPoint, _depositFee, _withdrawFee);
     }
 
     /// Update the given pool's parameters.
@@ -244,12 +192,7 @@ contract tGenesisFarm is Ownable {
     /// @param _depositFee New deposit fee assigned to the pool
     /// @param _withdrawFee New deposit fee assigned to the pool
     /// @dev Can only be called by the Operator.
-    function set(
-        uint256 _pid,
-        uint256 _allocPoint,
-        uint16 _depositFee,
-        uint16 _withdrawFee
-    ) public onlyOwnerOrOfficer {
+    function set(uint256 _pid, uint256 _allocPoint, uint16 _depositFee, uint16 _withdrawFee) public onlyOwnerOrOfficer {
         require(_depositFee <= 1500, "Deposit fee cannot be higher than 15%");
         require(_withdrawFee <= 1500, "Withdarw fee cannot be higher than 15%");
         massUpdatePools();
@@ -260,34 +203,21 @@ contract tGenesisFarm is Ownable {
         pool.allocPoint = _allocPoint;
         pool.depositFee = _depositFee;
         pool.withdrawFee = _withdrawFee;
-        emit ModifyPool(
-            msg.sender,
-            _pid,
-            _allocPoint,
-            totalAllocPoint,
-            _depositFee,
-            _withdrawFee
-        );
+        emit ModifyPool(msg.sender, _pid, _allocPoint, totalAllocPoint, _depositFee, _withdrawFee);
     }
 
     /// Return amount of accumulated rewards over the given time, according to the bath per second emission.
     /// @param _fromTime Time from which the generated rewards should be calculated
     /// @param _toTime Time to which the generated rewards should be calculated
-    function getGeneratedReward(uint256 _fromTime, uint256 _toTime)
-        public
-        view
-        returns (uint256)
-    {
+    function getGeneratedReward(uint256 _fromTime, uint256 _toTime) public view returns (uint256) {
         if (_fromTime >= _toTime) return 0;
         if (_toTime >= poolEndTime) {
             if (_fromTime >= poolEndTime) return 0;
-            if (_fromTime <= poolStartTime)
-                return (poolEndTime - poolStartTime) * bathPerSecond;
+            if (_fromTime <= poolStartTime) return (poolEndTime - poolStartTime) * bathPerSecond;
             return (poolEndTime - _fromTime) * bathPerSecond;
         } else {
             if (_toTime <= poolStartTime) return 0;
-            if (_fromTime <= poolStartTime)
-                return (_toTime - poolStartTime) * bathPerSecond;
+            if (_fromTime <= poolStartTime) return (_toTime - poolStartTime) * bathPerSecond;
             return (_toTime - _fromTime) * bathPerSecond;
         }
     }
@@ -298,29 +228,18 @@ contract tGenesisFarm is Ownable {
     /// @return Amount of pending rewards for specific user
     /// @dev To be used in UI
 
-    function pendingBaths(uint256 _pid, address _user)
-        external
-        view
-        returns (uint256)
-    {
+    function pendingBaths(uint256 _pid, address _user) external view returns (uint256) {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accBathPerShare = pool.accBathPerShare;
         uint256 tokenSupply = pool.token.balanceOf(address(this));
-        if (block.timestamp > pool.lastRewardTime && tokenSupply != 0) {
-            uint256 _generatedReward = getGeneratedReward(
-                pool.lastRewardTime,
-                block.timestamp
-            );
-            uint256 _bathReward = (_generatedReward * pool.allocPoint) /
-                totalAllocPoint;
-            accBathPerShare =
-                accBathPerShare +
-                ((_bathReward * 1e18) / tokenSupply);
+        if (block.timestamp > pool.lastRewardTime && tokenSupply != 0 && pool.isExpired != true) {
+            uint256 _generatedReward = getGeneratedReward(pool.lastRewardTime, block.timestamp);
+            uint256 _bathReward = (_generatedReward * pool.allocPoint) / totalAllocPoint;
+            accBathPerShare = accBathPerShare + ((_bathReward * 1e18) / tokenSupply);
         }
         return ((user.amount * accBathPerShare) / 1e18) - user.rewardDebt;
-    }
-
+    }   
     /// Update reward variables for all pools.
     /// @dev Be careful of gas spending!
     function massUpdatePools() public {
@@ -337,6 +256,9 @@ contract tGenesisFarm is Ownable {
         if (block.timestamp <= pool.lastRewardTime) {
             return;
         }
+        if (pool.isExpired) {
+            return;
+        }
         uint256 tokenSupply = pool.token.balanceOf(address(this));
         if (tokenSupply == 0) {
             pool.lastRewardTime = block.timestamp;
@@ -347,15 +269,9 @@ contract tGenesisFarm is Ownable {
             totalAllocPoint = totalAllocPoint + pool.allocPoint;
         }
         if (totalAllocPoint > 0) {
-            uint256 _generatedReward = getGeneratedReward(
-                pool.lastRewardTime,
-                block.timestamp
-            );
-            uint256 _bathReward = (_generatedReward * pool.allocPoint) /
-                totalAllocPoint;
-            pool.accBathPerShare =
-                pool.accBathPerShare +
-                ((_bathReward * 1e18) / tokenSupply);
+            uint256 _generatedReward = getGeneratedReward(pool.lastRewardTime, block.timestamp);
+            uint256 _bathReward = (_generatedReward * pool.allocPoint) / totalAllocPoint;
+            pool.accBathPerShare = pool.accBathPerShare + ((_bathReward * 1e18) / tokenSupply);
         }
         pool.lastRewardTime = block.timestamp;
     }
@@ -369,26 +285,17 @@ contract tGenesisFarm is Ownable {
         UserInfo storage user = userInfo[_pid][_sender];
         updatePool(_pid);
         if (user.amount > 0) {
-            uint256 _pending = ((user.amount * pool.accBathPerShare) / 1e18) -
-                user.rewardDebt;
+            uint256 _pending = ((user.amount * pool.accBathPerShare) / 1e18) - user.rewardDebt;
             if (_pending > 0) {
                 safeBathTransfer(_sender, _pending);
                 emit RewardPaid(_sender, _pending);
             }
         }
         if (_amount > 0) {
-            if (pool.depositFee > 0) {
+            if(pool.depositFee > 0) {
                 uint256 depositFeeAmount = (_amount * pool.depositFee) / 10000;
-                pool.token.safeTransferFrom(
-                    _sender,
-                    feeCollector,
-                    depositFeeAmount
-                );
-                pool.token.safeTransferFrom(
-                    _sender,
-                    address(this),
-                    _amount - depositFeeAmount
-                );
+                pool.token.safeTransferFrom(_sender, feeCollector, depositFeeAmount);
+                pool.token.safeTransferFrom(_sender, address(this), _amount - depositFeeAmount);
                 user.amount = user.amount + (_amount - depositFeeAmount);
             } else {
                 pool.token.safeTransferFrom(_sender, address(this), _amount);
@@ -409,9 +316,8 @@ contract tGenesisFarm is Ownable {
         require(user.amount >= _amount, "withdraw: not good");
         updatePool(_pid);
         uint256 bathBalance = bath.balanceOf(address(this));
-        uint256 _pending = ((user.amount * pool.accBathPerShare) / 1e18) -
-            user.rewardDebt;
-
+        uint256 _pending = ((user.amount * pool.accBathPerShare) / 1e18) - user.rewardDebt;
+        
         if (_pending > 0 && bathBalance > _pending) {
             safeBathTransfer(_sender, _pending);
             user.claimedBath = user.claimedBath + _pending;
@@ -419,12 +325,12 @@ contract tGenesisFarm is Ownable {
             emit RewardPaid(_sender, _pending);
         }
         if (_amount > 0) {
-            if (pool.withdrawFee > 0) {
-                uint256 withdrawFeeAmount = (_amount * pool.withdrawFee) /
-                    10000;
+            if(pool.withdrawFee > 0) {
+                uint256 withdrawFeeAmount = (_amount * pool.withdrawFee) / 10000;
                 pool.token.safeTransfer(feeCollector, withdrawFeeAmount);
                 pool.token.safeTransfer(_sender, _amount - withdrawFeeAmount);
-            } else {
+            }    
+            else {   
                 pool.token.safeTransfer(_sender, _amount);
             }
             user.amount = user.amount - _amount;
@@ -470,32 +376,27 @@ contract tGenesisFarm is Ownable {
         emit UpdateFeeCollector(msg.sender, address(_feeCollector));
     }
 
-    function clearReward(uint256 _amount, address _receiver)
-        public
-        onlyOwnerOrOfficer
-    {
+    function clearReward(uint256 _amount, address _receiver) public onlyOwnerOrOfficer{
         safeBathTransfer(_receiver, _amount);
     }
 
-    function updateEmissionRate(uint256 _bathPerSecond)
-        public
-        onlyOwnerOrOfficer
-    {
+    function updateEmissionRate(uint256 _bathPerSecond) public onlyOwnerOrOfficer {
         massUpdatePools();
         emit EmissionRateUpdated(msg.sender, bathPerSecond, _bathPerSecond);
         bathPerSecond = _bathPerSecond;
     }
 
+    function remove(uint256 _pid) public onlyOwnerOrOfficer {
+        massUpdatePools();
+        PoolInfo storage pool = poolInfo[_pid];
+        pool.isExpired = true;
+    }
     /// Transferred tokens sent to the contract by mistake.
     /// @param _token Address of token to be transferred (cannot be staking nor the reward token)
     /// @param _amount Amount of tokens to be transferred
     /// @param _to Recipient address of the transfer
     /// @dev Can only be called by the Operator
-    function governanceRecoverUnsupported(
-        IERC20 _token,
-        uint256 _amount,
-        address _to
-    ) external onlyOwnerOrOfficer {
+    function governanceRecoverUnsupported(IERC20 _token, uint256 _amount, address _to) external onlyOwnerOrOfficer {
         if (block.timestamp < poolEndTime + 7 days) {
             // do not allow to drain core token (BATH or lps) if less than 7 days after pool ends
             require(_token != bath, "BATH");
@@ -508,6 +409,6 @@ contract tGenesisFarm is Ownable {
         _token.safeTransfer(_to, _amount);
         emit RecoverUnsupported(msg.sender, address(_token), _amount, _to);
     }
-
-    receive() external payable {}
+    receive() external payable {
+    }
 }
