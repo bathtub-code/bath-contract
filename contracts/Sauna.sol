@@ -281,6 +281,7 @@ contract Sauna is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_sender];
         updatePool(_pid);
+        require(pool.isExpired != true, "Expired Pool");
         if (user.amount > 0) {
             uint256 _pending = ((user.amount * pool.accwETHPerShare) / 1e18) - user.rewardDebt;
             if (_pending > 0) {
