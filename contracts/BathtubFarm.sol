@@ -6,9 +6,9 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-// Note that this pool has no minter key of TUB (rewards).
+// Note that this pool has no minter key of BATH (rewards).
 // Instead, rewards will be sent to this pool at the beginning.
-contract SteamRoom is Ownable {
+contract BathtubFarm is Ownable {
     using SafeERC20 for IERC20;
 
     /// User-specific information.
@@ -17,8 +17,8 @@ contract SteamRoom is Ownable {
         uint256 amount;
         /// How many unclaimed rewards does the user have pending.
         uint256 rewardDebt;
-        /// How many tubs the user claimed.
-        uint256 claimedTub;
+        /// How many baths the user claimed.
+        uint256 claimedBath;
     }
 
     /// Pool-specific information.
@@ -26,26 +26,26 @@ contract SteamRoom is Ownable {
         /// Address of the token staked in the pool.
         IERC20 token;
         /// Allocation points assigned to the pool.
-        /// @dev Rewards are distributed in the pool according to formula: 
-        //      (allocPoint / totalAllocPoint) * tubPerSecond
+        /// @dev Rewards are distributed in the pool according to formula:
+        //      (allocPoint / totalAllocPoint) * bathPerSecond
         uint256 allocPoint;
         /// Last time the rewards distribution was calculated.
         uint256 lastRewardTime;
-        /// Accumulated TUB per share.
-        uint256 accTubPerShare;
+        /// Accumulated BATH per share.
+        uint256 accBathPerShare;
         /// Deposit fee in %, where 100 == 1%.
         uint16 depositFee;
         uint16 withdrawFee;
         /// Is the pool rewards emission started.
         bool isStarted;
         /// Pool claimed Amount
-        uint256 poolClaimedTub;
+        uint256 poolClaimedBath;
         /// Is the pool expired or not.
         bool isExpired;
     }
 
     /// Reward token.
-    IERC20 public tub;
+    IERC20 public bath;
 
     /// Address where the deposit fees are transferred.
     address public feeCollector;
@@ -60,14 +60,14 @@ contract SteamRoom is Ownable {
     /// Total allocation points. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
 
-    /// The time when TUB emissions start.
+    /// The time when BATH emissions start.
     uint256 public poolStartTime;
 
-    /// The time when TUB emissions end.
+    /// The time when BATH emissions end.
     uint256 public poolEndTime;
 
-    /// Amount of TUB emitted each second.
-    uint256 public tubPerSecond;
+    /// Amount of BATH emitted each second.
+    uint256 public bathPerSecond;
     /// Running time of emissions (in seconds).
     uint256 public runningTime;
     /// Total amount of tokens to be emitted.
@@ -86,29 +86,29 @@ contract SteamRoom is Ownable {
     event EmissionRateUpdated(address indexed caller, uint256 previousAmount, uint256 newAmount);
 
     /// Default constructor.
-    /// @param _tubAddress Address of TUB token.
+    /// @param _bathAddress Address of BATH token.
     /// @param _poolStartTime Emissions start time.
     /// @param _runningTime Running time of emissions (in seconds).
-    /// @param _tubPerSecond tub Per Second
+    /// @param _bathPerSecond bath Per Second
     /// @param _feeCollector Address where the deposit fees are transferred.
     constructor(
-        address _tubAddress,
+        address _bathAddress,
         uint256 _poolStartTime,
         uint256 _runningTime,
-        uint256 _tubPerSecond,
+        uint256 _bathPerSecond,
         address _feeCollector
     ) {
         require(block.timestamp < _poolStartTime, "late");
         require(_feeCollector != address(0), "Address cannot be 0");
         require(_runningTime >= 1 days, "Running time has to be at least 1 day");
 
-        if (_tubAddress != address(0)) tub = IERC20(_tubAddress);
+        if (_bathAddress != address(0)) bath = IERC20(_bathAddress);
 
         poolStartTime = _poolStartTime;
         runningTime = _runningTime;
         poolEndTime = poolStartTime + runningTime;
 
-        tubPerSecond = _tubPerSecond;
+        bathPerSecond = _bathPerSecond;
 
         feeCollector = _feeCollector;
         poolofficer = msg.sender;
@@ -122,7 +122,7 @@ contract SteamRoom is Ownable {
     function checkPoolDuplicate(IERC20 _token) internal view {
         uint256 length = poolInfo.length;
         for (uint256 pid = 0; pid < length; ++pid) {
-            require(poolInfo[pid].token != _token, "TubGenesisRewardPool: existing pool?");
+            require(poolInfo[pid].token != _token, "BathGenesisRewardPool: existing pool?");
         }
     }
 
@@ -171,11 +171,11 @@ contract SteamRoom is Ownable {
             token : _token,
             allocPoint : _allocPoint,
             lastRewardTime : _lastRewardTime,
-            accTubPerShare : 0,
+            accBathPerShare : 0,
             depositFee : _depositFee,
             withdrawFee : _withdrawFee,
             isStarted : _isStarted,
-            poolClaimedTub : 0,
+            poolClaimedBath : 0,
             isExpired : false
             }));
         if (_isStarted) {
@@ -205,19 +205,19 @@ contract SteamRoom is Ownable {
         emit ModifyPool(msg.sender, _pid, _allocPoint, totalAllocPoint, _depositFee, _withdrawFee);
     }
 
-    /// Return amount of accumulated rewards over the given time, according to the tub per second emission.
+    /// Return amount of accumulated rewards over the given time, according to the bath per second emission.
     /// @param _fromTime Time from which the generated rewards should be calculated
     /// @param _toTime Time to which the generated rewards should be calculated
     function getGeneratedReward(uint256 _fromTime, uint256 _toTime) public view returns (uint256) {
         if (_fromTime >= _toTime) return 0;
         if (_toTime >= poolEndTime) {
             if (_fromTime >= poolEndTime) return 0;
-            if (_fromTime <= poolStartTime) return (poolEndTime - poolStartTime) * tubPerSecond;
-            return (poolEndTime - _fromTime) * tubPerSecond;
+            if (_fromTime <= poolStartTime) return (poolEndTime - poolStartTime) * bathPerSecond;
+            return (poolEndTime - _fromTime) * bathPerSecond;
         } else {
             if (_toTime <= poolStartTime) return 0;
-            if (_fromTime <= poolStartTime) return (_toTime - poolStartTime) * tubPerSecond;
-            return (_toTime - _fromTime) * tubPerSecond;
+            if (_fromTime <= poolStartTime) return (_toTime - poolStartTime) * bathPerSecond;
+            return (_toTime - _fromTime) * bathPerSecond;
         }
     }
 
@@ -227,18 +227,18 @@ contract SteamRoom is Ownable {
     /// @return Amount of pending rewards for specific user
     /// @dev To be used in UI
 
-    function pendingTubs(uint256 _pid, address _user) external view returns (uint256) {
+    function pendingBaths(uint256 _pid, address _user) external view returns (uint256) {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
-        uint256 accTubPerShare = pool.accTubPerShare;
+        uint256 accBathPerShare = pool.accBathPerShare;
         uint256 tokenSupply = pool.token.balanceOf(address(this));
         if (block.timestamp > pool.lastRewardTime && tokenSupply != 0 && pool.isExpired != true) {
             uint256 _generatedReward = getGeneratedReward(pool.lastRewardTime, block.timestamp);
-            uint256 _tubReward = (_generatedReward * pool.allocPoint) / totalAllocPoint;
-            accTubPerShare = accTubPerShare + ((_tubReward * 1e18) / tokenSupply);
+            uint256 _bathReward = (_generatedReward * pool.allocPoint) / totalAllocPoint;
+            accBathPerShare = accBathPerShare + ((_bathReward * 1e18) / tokenSupply);
         }
-        return ((user.amount * accTubPerShare) / 1e18) - user.rewardDebt;
-    }   
+        return ((user.amount * accBathPerShare) / 1e18) - user.rewardDebt;
+    }
     /// Update reward variables for all pools.
     /// @dev Be careful of gas spending!
     function massUpdatePools() public {
@@ -269,8 +269,8 @@ contract SteamRoom is Ownable {
         }
         if (totalAllocPoint > 0) {
             uint256 _generatedReward = getGeneratedReward(pool.lastRewardTime, block.timestamp);
-            uint256 _tubReward = (_generatedReward * pool.allocPoint) / totalAllocPoint;
-            pool.accTubPerShare = pool.accTubPerShare + ((_tubReward * 1e18) / tokenSupply);
+            uint256 _bathReward = (_generatedReward * pool.allocPoint) / totalAllocPoint;
+            pool.accBathPerShare = pool.accBathPerShare + ((_bathReward * 1e18) / tokenSupply);
         }
         pool.lastRewardTime = block.timestamp;
     }
@@ -285,9 +285,9 @@ contract SteamRoom is Ownable {
         updatePool(_pid);
         require(pool.isExpired != true, "Expired Pool");
         if (user.amount > 0) {
-            uint256 _pending = ((user.amount * pool.accTubPerShare) / 1e18) - user.rewardDebt;
+            uint256 _pending = ((user.amount * pool.accBathPerShare) / 1e18) - user.rewardDebt;
             if (_pending > 0) {
-                safeTubTransfer(_sender, _pending);
+                safeBathTransfer(_sender, _pending);
                 emit RewardPaid(_sender, _pending);
             }
         }
@@ -302,7 +302,7 @@ contract SteamRoom is Ownable {
                 user.amount = user.amount + _amount;
             }
         }
-        user.rewardDebt = (user.amount * pool.accTubPerShare) / 1e18;
+        user.rewardDebt = (user.amount * pool.accBathPerShare) / 1e18;
         emit Deposit(_sender, _pid, _amount, pool.depositFee);
     }
 
@@ -315,13 +315,13 @@ contract SteamRoom is Ownable {
         UserInfo storage user = userInfo[_pid][_sender];
         require(user.amount >= _amount, "withdraw: not good");
         updatePool(_pid);
-        uint256 tubBalance = tub.balanceOf(address(this));
-        uint256 _pending = ((user.amount * pool.accTubPerShare) / 1e18) - user.rewardDebt;
-        
-        if (_pending > 0 && tubBalance > _pending) {
-            safeTubTransfer(_sender, _pending);
-            user.claimedTub = user.claimedTub + _pending;
-            pool.poolClaimedTub = pool.poolClaimedTub + _pending;
+        uint256 bathBalance = bath.balanceOf(address(this));
+        uint256 _pending = ((user.amount * pool.accBathPerShare) / 1e18) - user.rewardDebt;
+
+        if (_pending > 0 && bathBalance > _pending) {
+            safeBathTransfer(_sender, _pending);
+            user.claimedBath = user.claimedBath + _pending;
+            pool.poolClaimedBath = pool.poolClaimedBath + _pending;
             emit RewardPaid(_sender, _pending);
         }
         if (_amount > 0) {
@@ -329,13 +329,13 @@ contract SteamRoom is Ownable {
                 uint256 withdrawFeeAmount = (_amount * pool.withdrawFee) / 10000;
                 pool.token.safeTransfer(feeCollector, withdrawFeeAmount);
                 pool.token.safeTransfer(_sender, _amount - withdrawFeeAmount);
-            }    
-            else {   
+            }
+            else {
                 pool.token.safeTransfer(_sender, _amount);
             }
             user.amount = user.amount - _amount;
         }
-        user.rewardDebt = (user.amount * pool.accTubPerShare) / 1e18;
+        user.rewardDebt = (user.amount * pool.accBathPerShare) / 1e18;
 
         emit Withdraw(_sender, _pid, _amount, pool.withdrawFee);
     }
@@ -352,17 +352,17 @@ contract SteamRoom is Ownable {
         emit EmergencyWithdraw(msg.sender, _pid, _amount);
     }
 
-    /// Safe TUB transfer function.
+    /// Safe BATH transfer function.
     /// @param _to Recipient address of the transfer
     /// @param _amount Amount of tokens to be transferred
-    /// @dev Used just in case if rounding error causes pool to not have enough TUB.
-    function safeTubTransfer(address _to, uint256 _amount) internal {
-        uint256 _tubBal = tub.balanceOf(address(this));
-        if (_tubBal > 0) {
-            if (_amount > _tubBal) {
-                tub.safeTransfer(_to, _tubBal);
+    /// @dev Used just in case if rounding error causes pool to not have enough BATH.
+    function safeBathTransfer(address _to, uint256 _amount) internal {
+        uint256 _bathBal = bath.balanceOf(address(this));
+        if (_bathBal > 0) {
+            if (_amount > _bathBal) {
+                bath.safeTransfer(_to, _bathBal);
             } else {
-                tub.safeTransfer(_to, _amount);
+                bath.safeTransfer(_to, _amount);
             }
         }
     }
@@ -377,19 +377,20 @@ contract SteamRoom is Ownable {
     }
 
     function clearReward(uint256 _amount, address _receiver) public onlyOwnerOrOfficer{
-        safeTubTransfer(_receiver, _amount);
+        safeBathTransfer(_receiver, _amount);
     }
 
-    function updateEmissionRate(uint256 _tubPerSecond) public onlyOwnerOrOfficer {
-        massUpdatePools();
-        emit EmissionRateUpdated(msg.sender, tubPerSecond, _tubPerSecond);
-        tubPerSecond = _tubPerSecond;
-    }
     function remove(uint256 _pid) public onlyOwnerOrOfficer {
         massUpdatePools();
         PoolInfo storage pool = poolInfo[_pid];
         pool.isExpired = true;
     }
+    function updateEmissionRate(uint256 _bathPerSecond) public onlyOwnerOrOfficer {
+        massUpdatePools();
+        emit EmissionRateUpdated(msg.sender, bathPerSecond, _bathPerSecond);
+        bathPerSecond = _bathPerSecond;
+    }
+
     /// Transferred tokens sent to the contract by mistake.
     /// @param _token Address of token to be transferred (cannot be staking nor the reward token)
     /// @param _amount Amount of tokens to be transferred
@@ -397,8 +398,8 @@ contract SteamRoom is Ownable {
     /// @dev Can only be called by the Operator
     function governanceRecoverUnsupported(IERC20 _token, uint256 _amount, address _to) external onlyOwnerOrOfficer {
         if (block.timestamp < poolEndTime + 7 days) {
-            // do not allow to drain core token (TUB or lps) if less than 7 days after pool ends
-            require(_token != tub, "TUB");
+            // do not allow to drain core token (BATH or lps) if less than 7 days after pool ends
+            require(_token != bath, "BATH");
             uint256 length = poolInfo.length;
             for (uint256 pid = 0; pid < length; ++pid) {
                 PoolInfo storage pool = poolInfo[pid];
