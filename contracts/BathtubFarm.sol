@@ -49,6 +49,7 @@ contract BathtubFarm is Ownable {
 
     /// Address where the deposit fees are transferred.
     address public feeCollector;
+    address public mrkgFeeCollector;
     address public poolofficer;
 
     /// Information about each pool.
@@ -56,6 +57,8 @@ contract BathtubFarm is Ownable {
 
     /// Information about each user in each pool.
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
+
+    mapping(address => bool) public isExcludedFromFees;
 
     /// Total allocation points. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
@@ -96,10 +99,12 @@ contract BathtubFarm is Ownable {
         uint256 _poolStartTime,
         uint256 _runningTime,
         uint256 _bathPerSecond,
-        address _feeCollector
+        address _feeCollector,
+        address _mrkgFeeCollector
     ) {
         require(block.timestamp < _poolStartTime, "late");
         require(_feeCollector != address(0), "Address cannot be 0");
+        require(_mrkgFeeCollector != address(0), "Address cannot be 0");
         require(_runningTime >= 1 days, "Running time has to be at least 1 day");
 
         if (_bathAddress != address(0)) bath = IERC20(_bathAddress);
@@ -111,6 +116,7 @@ contract BathtubFarm is Ownable {
         bathPerSecond = _bathPerSecond;
 
         feeCollector = _feeCollector;
+        mrkgFeeCollector = _mrkgFeeCollector;
         poolofficer = msg.sender;
     }
     modifier onlyOwnerOrOfficer() {
@@ -292,14 +298,17 @@ contract BathtubFarm is Ownable {
             }
         }
         if (_amount > 0) {
-            if(pool.depositFee > 0) {
+            if(pool.depositFee > 0 && !isExcludedFromFees[_sender]) {
                 uint256 depositFeeAmount = (_amount * pool.depositFee) / 10000;
-                pool.token.safeTransferFrom(_sender, feeCollector, depositFeeAmount);
-                pool.token.safeTransferFrom(_sender, address(this), _amount - depositFeeAmount);
+                uint halfDepositFeeAmount = depositFeeAmount / 2;
                 user.amount = user.amount + (_amount - depositFeeAmount);
+
+                pool.token.safeTransferFrom(_sender, feeCollector, halfDepositFeeAmount);
+                pool.token.safeTransferFrom(_sender, mrkgFeeCollector, halfDepositFeeAmount);
+                pool.token.safeTransferFrom(_sender, address(this), _amount - depositFeeAmount);
             } else {
-                pool.token.safeTransferFrom(_sender, address(this), _amount);
                 user.amount = user.amount + _amount;
+                pool.token.safeTransferFrom(_sender, address(this), _amount);
             }
         }
         user.rewardDebt = (user.amount * pool.accBathPerShare) / 1e18;
@@ -376,6 +385,12 @@ contract BathtubFarm is Ownable {
         emit UpdateFeeCollector(msg.sender, address(_feeCollector));
     }
 
+    function setMrkgFeeCollector(address _mrkgFeeCollector) external onlyOwner {
+        require(_mrkgFeeCollector != address(0), "Address cannot be 0");
+        mrkgFeeCollector = _mrkgFeeCollector;
+        emit UpdateFeeCollector(msg.sender, address(_mrkgFeeCollector));
+    }
+
     function clearReward(uint256 _amount, address _receiver) public onlyOwnerOrOfficer{
         safeBathTransfer(_receiver, _amount);
     }
@@ -410,5 +425,9 @@ contract BathtubFarm is Ownable {
         emit RecoverUnsupported(msg.sender, address(_token), _amount, _to);
     }
     receive() external payable {
+    }
+
+    function setIsExcludedFromFees(address _address, bool _isExcluded) public onlyOwnerOrOfficer {
+        isExcludedFromFees[_address] = _isExcluded;
     }
 }

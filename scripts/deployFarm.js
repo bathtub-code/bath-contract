@@ -7,10 +7,10 @@ async function main() {
 
   console.log("Account balance:", (await deployer.getBalance()).toString());
 
-  const JacuzziContract = await ethers.getContractFactory("Jacuzzi");
+  const BathtubFarm = await ethers.getContractFactory("BathtubFarm");
 
-  const BathTokenAddress = "0x8Bfea674bE99b86B15e1ED46C030650B34a0AA5d";
-  const startTime = 1681961400;  //Monday, April 17, 2023 13:00:00 GMT+09:00
+  const BathTokenAddress = "0xA4D3f3FB7E05c3456F6D6Aa94520EfF62Cf89f4d";
+  const startTime = 1684428315;  //Thu May 18 2023 16:45:15 GMT+0000
   const runningTime = 3600 * 24 * 365 * 10;  //10 years - 315,360,000sec
   const BathPerSecond = "100000000000000000";
   //0.1 Bath per sec-  31,536,000 BATH will be spent for farms
@@ -18,9 +18,9 @@ async function main() {
   //262,800 BATH will be spent per Month.
 
   // The treasury Address for getting deposit Fee
-  const feeCollector = "0xe8f082A0831ECb553023f9de03f7e8fBd8EFc15E";
+  const feeCollector = "0x7524A8bA0B725a61DFC96137aF89cee9fd63fA7E";
 
-  const Farm = await JacuzziContract.deploy(
+  const Farm = await BathtubFarm.deploy(
     BathTokenAddress, startTime, runningTime, BathPerSecond, feeCollector);
 
   console.log("Farm address: ", Farm.address);

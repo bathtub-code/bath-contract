@@ -1,15 +1,25 @@
-
 require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
 
-const accounts = {
-  mnemonic: process.env.MNEMONIC,
-};
-
 module.exports = {
-  solidity: "0.8.10",
-  etherscan: {
-    apiKey: {}
+  solidity: {
+    version: "0.8.10",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200
+      }
+    }
   },
-  networks: {},
+  etherscan: {
+    apiKey: {
+      arbitrumOne: 'QPK7ZKPFEBIZZB89RUKNB842GZSGEYNW9J'
+    }
+  },
+  networks: {
+    arbitrumOne: {
+      url: "https://arb1.arbitrum.io/rpc",
+      accounts: [process.env.PK]
+    }
+  },
 };
