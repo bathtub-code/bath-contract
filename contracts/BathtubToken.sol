@@ -15,7 +15,7 @@ contract BathtubToken is ERC20, Ownable, BaseOFTV2 {
     uint8 private _sharedDecimals = 18;
     address private _lzEndpoint = 0x3c2269811836af69497E5F486A85D7316753cf62;
 
-    constructor(address _feeAddress) ERC20("Fake Bath Token", "FATH") BaseOFTV2(_sharedDecimals, _lzEndpoint) {
+    constructor(address _feeAddress) ERC20("Bathtub Token", "BATH") BaseOFTV2(_sharedDecimals, _lzEndpoint) {
         uint8 decimals = decimals();
         require(_sharedDecimals <= decimals, "OFT: sharedDecimals must be <= decimals");
         ld2sdRate = 10 ** (decimals - _sharedDecimals);
@@ -33,13 +33,11 @@ contract BathtubToken is ERC20, Ownable, BaseOFTV2 {
         return _transferWithTax(msg.sender, recipient, amount);
     }
 
-    function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
-        uint256 currentAllowance = allowance(sender, _msgSender());
-        require(currentAllowance >= amount, "ERC20: transfer amount exceeds allowance");
-        unchecked {
-            _approve(sender, _msgSender(), currentAllowance - amount);
-        }
-        return _transferWithTax(sender, recipient, amount);
+    function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
+        address spender = _msgSender();
+        _spendAllowance(from, spender, amount);
+        _transferWithTax(from, to, amount);
+        return true;
     }
 
     function _transferWithTax(address sender, address recipient, uint256 amount) internal returns (bool) {
@@ -49,12 +47,13 @@ contract BathtubToken is ERC20, Ownable, BaseOFTV2 {
             uint256 burnAmount = feeAmount / 2; // 0.5% burn
             uint256 feeToAddress = feeAmount - burnAmount; // 0.5% to fee address
 
-            super.transferFrom(sender, recipient, netAmount); // Transfer net amount
-            super.transferFrom(sender, feeAddress, feeToAddress); // Transfer fee to fee address
-            super._burn(sender, burnAmount); // Burn amount
+            super._transfer(sender, recipient, netAmount); // Transfer net amount
+            super._transfer(sender, feeAddress, feeToAddress); // Transfer fee to fee address
+            _burn(sender, burnAmount); // Burn amount
             return true;
         } else {
-            return super.transferFrom(sender, recipient, amount);
+            super._transfer(sender, recipient, amount);
+            return true;
         }
     }
 
@@ -92,7 +91,7 @@ contract BathtubToken is ERC20, Ownable, BaseOFTV2 {
         address spender = _msgSender();
         // if transfer from this contract, no need to check allowance
         if (_from != address(this) && _from != spender) _spendAllowance(_from, spender, _amount);
-        _transfer(_from, _to, _amount);
+        _transferWithTax(_from, _to, _amount);
         return _amount;
     }
 
