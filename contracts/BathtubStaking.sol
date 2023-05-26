@@ -78,8 +78,8 @@ contract BathtubStaking is Ownable, ReentrancyGuard {
      * @param _admin: admin address with ownership
      */
     function initialize(
-        IERC20Metadata _stakedToken,
-        IERC20Metadata _rewardToken,
+        address _stakedToken,
+        address _rewardToken,
         uint256 _rewardPerBlock,
         uint256 _lockDays,
         uint256 _lockPenalty,
@@ -92,17 +92,14 @@ contract BathtubStaking is Ownable, ReentrancyGuard {
         // Make this contract initialized
         isInitialized = true;
 
-        stakedToken = _stakedToken;
-        rewardToken = _rewardToken;
+        stakedToken = IERC20Metadata(_stakedToken);
+        rewardToken = IERC20Metadata(_rewardToken);
         rewardPerBlock = _rewardPerBlock;
 
         require(_lockPenalty <= 100, "Must be less than 100");
         lockPenalty = _lockPenalty;
 
-        uint256 decimalsRewardToken = uint256(rewardToken.decimals());
-        require(decimalsRewardToken < 30, "Must be less than 30");
-
-        PRECISION_FACTOR = uint256(10**(uint256(30) - decimalsRewardToken));
+        PRECISION_FACTOR = uint256(10**12);
 
         lastRewardBlock = block.number;
         lockDays = _lockDays;
