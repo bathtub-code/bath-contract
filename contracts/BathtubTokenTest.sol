@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./oft/BaseOFTV2.sol";
 
-contract BathtubToken is ERC20, Ownable, BaseOFTV2 {
+contract BathtubTokenTest is ERC20, Ownable, BaseOFTV2 {
     address public feeAddress;
     bool public taxEnabled;
     mapping(address => bool) public feeExempt;
@@ -16,7 +16,7 @@ contract BathtubToken is ERC20, Ownable, BaseOFTV2 {
     uint8 private _sharedDecimals = 18;
     address private _lzEndpoint = 0x3c2269811836af69497E5F486A85D7316753cf62;
 
-    constructor(address _feeAddress) ERC20("Bathtub Token", "BATH") BaseOFTV2(_sharedDecimals, _lzEndpoint) {
+    constructor(address _feeAddress) ERC20("Bathtub Token Test", "TBATH") BaseOFTV2(_sharedDecimals, _lzEndpoint) {
         uint8 decimals = decimals();
         require(_sharedDecimals <= decimals, "OFT: sharedDecimals must be <= decimals");
         ld2sdRate = 10 ** (decimals - _sharedDecimals);

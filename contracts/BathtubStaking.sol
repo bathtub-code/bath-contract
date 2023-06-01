@@ -210,16 +210,6 @@ contract BathtubStaking is Ownable, ReentrancyGuard {
     }
 
     /*
-     * @notice Update Lock Days
-     * @dev Only callable by owner.
-     * @param _lockDays: new lock days
-     */
-    function updateLockDays(uint256 _lockDays) external onlyOwner {
-        lockDays = _lockDays;
-        emit NewLockDays(lockDays);
-    }
-
-    /*
      * @notice Update reward per block
      * @dev Only callable by owner.
      * @param _rewardPerBlock: the reward per block
